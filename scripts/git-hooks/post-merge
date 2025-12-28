@@ -1,0 +1,17 @@
+#!/bin/bash
+set -e
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+if [[ "$BRANCH" != "main" && "$BRANCH" != "master" ]]; then
+    exit 0
+fi
+
+BINARY=$(grep '^name = ' Cargo.toml | head -1 | sed 's/name = "\(.*\)"/\1/')
+
+echo "📦 Post-merge: building and installing $BINARY..."
+cargo build --release --quiet
+install "target/release/$BINARY" ~/.local/bin/
+echo "✅ Installed $BINARY to ~/.local/bin/"
