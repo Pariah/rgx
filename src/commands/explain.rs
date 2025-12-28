@@ -46,3 +46,118 @@ Requirements:
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn prompt_contains_pattern() {
+        let cmd = ExplainCommand::new();
+        let prompt = cmd.build_prompt(r"\d{3}-\d{4}");
+        assert!(prompt.contains(r"\d{3}-\d{4}"));
+    }
+
+    #[test]
+    fn prompt_has_json_schema() {
+        let cmd = ExplainCommand::new();
+        let prompt = cmd.build_prompt(r"\d+");
+        assert!(prompt.contains("\"tokens\""));
+        assert!(prompt.contains("\"token\""));
+        assert!(prompt.contains("\"explanation\""));
+        assert!(prompt.contains("\"purpose\""));
+    }
+
+    #[test]
+    fn prompt_has_requirements() {
+        let cmd = ExplainCommand::new();
+        let prompt = cmd.build_prompt(r"\d+");
+        assert!(prompt.contains("Break down EVERY token"));
+        assert!(prompt.contains("Group logical units"));
+    }
+
+    #[test]
+    fn default_is_new() {
+        let cmd1 = ExplainCommand::new();
+        let cmd2 = ExplainCommand::default();
+        // Both should produce same prompt for same input
+        assert_eq!(cmd1.build_prompt("test"), cmd2.build_prompt("test"));
+    }
+
+    #[test]
+    fn parse_valid_response() {
+        let cmd = ExplainCommand::new();
+        let json = r#"{"tokens": [{"token": "\\d", "explanation": "digit"}, {"token": "+", "explanation": "one or more"}], "purpose": "matches digits"}"#;
+        let resp = cmd.parse_response(json).unwrap();
+        assert_eq!(resp.tokens.len(), 2);
+        assert_eq!(resp.tokens[0].token, "\\d");
+        assert_eq!(resp.tokens[0].explanation, "digit");
+        assert_eq!(resp.tokens[1].token, "+");
+        assert_eq!(resp.purpose, "matches digits");
+    }
+
+    #[test]
+    fn parse_empty_tokens() {
+        let cmd = ExplainCommand::new();
+        let json = r#"{"tokens": [], "purpose": "empty pattern"}"#;
+        let resp = cmd.parse_response(json).unwrap();
+        assert!(resp.tokens.is_empty());
+        assert_eq!(resp.purpose, "empty pattern");
+    }
+
+    #[test]
+    fn parse_malformed_json() {
+        let cmd = ExplainCommand::new();
+        let result = cmd.parse_response("not json");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_missing_purpose() {
+        let cmd = ExplainCommand::new();
+        let json = r#"{"tokens": []}"#;
+        let result = cmd.parse_response(json);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_missing_tokens() {
+        let cmd = ExplainCommand::new();
+        let json = r#"{"purpose": "test"}"#;
+        let result = cmd.parse_response(json);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn token_struct_clone() {
+        let token = Token {
+            token: "\\d".to_string(),
+            explanation: "digit".to_string(),
+        };
+        let cloned = token.clone();
+        assert_eq!(token.token, cloned.token);
+        assert_eq!(token.explanation, cloned.explanation);
+    }
+
+    #[test]
+    fn explain_response_clone() {
+        let resp = ExplainResponse {
+            tokens: vec![Token {
+                token: "a".to_string(),
+                explanation: "letter a".to_string(),
+            }],
+            purpose: "matches a".to_string(),
+        };
+        let cloned = resp.clone();
+        assert_eq!(resp.tokens.len(), cloned.tokens.len());
+        assert_eq!(resp.purpose, cloned.purpose);
+    }
+
+    #[test]
+    fn complex_pattern_in_prompt() {
+        let cmd = ExplainCommand::new();
+        let pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$";
+        let prompt = cmd.build_prompt(pattern);
+        assert!(prompt.contains(pattern));
+    }
+}
