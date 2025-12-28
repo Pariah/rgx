@@ -1,6 +1,6 @@
 /target
 CLAUDE.md
-.claude
+.claude/settings.local.json
 .DS_Store
 *.swp
 *.swo
