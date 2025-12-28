@@ -1,1 +1,6 @@
 /target
+CLAUDE.md
+.claude
+.DS_Store
+*.swp
+*.swo
