@@ -217,3 +217,193 @@ pub fn format_test(result: &TestResult, raw: bool) -> String {
 
     out
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn colorize_empty_pattern() {
+        let result = colorize_regex("");
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn colorize_plain_text() {
+        let result = colorize_regex("abc");
+        assert_eq!(result, "abc");
+    }
+
+    #[test]
+    fn colorize_character_classes_cyan() {
+        // \d, \D, \w, \W, \s, \S should be cyan
+        for class in &[r"\d", r"\D", r"\w", r"\W", r"\s", r"\S"] {
+            let result = colorize_regex(class);
+            // Result should be longer (has ANSI escapes) and contain the class
+            assert!(
+                result.len() > class.len(),
+                "Expected ANSI escapes for {}",
+                class
+            );
+            assert!(result.contains(class), "Expected {} in output", class);
+        }
+    }
+
+    #[test]
+    fn colorize_escaped_anchors_red() {
+        // \b, \B, \A, \z, \Z should be red
+        for anchor in &[r"\b", r"\B", r"\A", r"\z", r"\Z"] {
+            let result = colorize_regex(anchor);
+            assert!(
+                result.len() > anchor.len(),
+                "Expected ANSI escapes for {}",
+                anchor
+            );
+            assert!(result.contains(anchor), "Expected {} in output", anchor);
+        }
+    }
+
+    #[test]
+    fn colorize_line_anchors_red() {
+        // ^ and $ should be red
+        let caret = colorize_regex("^");
+        assert!(caret.len() > 1, "Expected ANSI escapes for ^");
+
+        let dollar = colorize_regex("$");
+        assert!(dollar.len() > 1, "Expected ANSI escapes for $");
+    }
+
+    #[test]
+    fn colorize_quantifiers_yellow() {
+        // +, *, ? should be yellow
+        for q in &["+", "*", "?"] {
+            let result = colorize_regex(q);
+            assert!(result.len() > 1, "Expected ANSI escapes for {}", q);
+        }
+    }
+
+    #[test]
+    fn colorize_quantifier_braces_yellow() {
+        // {3}, {1,5}, {2,} should be yellow
+        for q in &["{3}", "{1,5}", "{2,}"] {
+            let result = colorize_regex(q);
+            assert!(result.len() > q.len(), "Expected ANSI escapes for {}", q);
+            assert!(result.contains(q), "Expected {} in output", q);
+        }
+    }
+
+    #[test]
+    fn colorize_alternation_yellow() {
+        let result = colorize_regex("|");
+        assert!(result.len() > 1, "Expected ANSI escapes for |");
+    }
+
+    #[test]
+    fn colorize_character_sets_magenta() {
+        // [abc], [^abc], [a-z] should be magenta (entire set)
+        for set in &["[abc]", "[^abc]", "[a-z]", "[0-9]"] {
+            let result = colorize_regex(set);
+            assert!(
+                result.len() > set.len(),
+                "Expected ANSI escapes for {}",
+                set
+            );
+            assert!(result.contains(set), "Expected {} in output", set);
+        }
+    }
+
+    #[test]
+    fn colorize_character_set_with_escapes() {
+        // [\d\w] should be magenta as one unit
+        let result = colorize_regex(r"[\d\w]");
+        assert!(result.len() > 6, "Expected ANSI escapes for [\\d\\w]");
+        assert!(result.contains(r"[\d\w]"), "Set should stay together");
+    }
+
+    #[test]
+    fn colorize_groups_green() {
+        // ( and ) should be green
+        let open = colorize_regex("(");
+        assert!(open.len() > 1, "Expected ANSI escapes for (");
+
+        let close = colorize_regex(")");
+        assert!(close.len() > 1, "Expected ANSI escapes for )");
+    }
+
+    #[test]
+    fn colorize_non_capturing_group() {
+        // (?:...) - parens green, content normal
+        let result = colorize_regex("(?:abc)");
+        assert!(result.contains("abc"), "Content should be present");
+        assert!(result.len() > 7, "Expected ANSI escapes");
+    }
+
+    #[test]
+    fn colorize_complex_pattern() {
+        // ^\d{3}-\d{4}$ - mixed colors
+        let result = colorize_regex(r"^\d{3}-\d{4}$");
+        // Should be much longer than input due to multiple color escapes
+        assert!(result.len() > 15, "Expected many ANSI escapes");
+        // Should contain the literal dash
+        assert!(result.contains("-"), "Literal dash should be present");
+    }
+
+    #[test]
+    fn colorize_escaped_brackets_not_treated_as_set() {
+        // \[ and \] should NOT trigger character set parsing
+        let result = colorize_regex(r"\[abc\]");
+        // This should just show the escapes normally, not as a magenta set
+        assert!(result.contains(r"\["), "Escaped [ should be present");
+        assert!(result.contains(r"\]"), "Escaped ] should be present");
+    }
+
+    #[test]
+    fn colorize_literal_close_bracket_first_in_set() {
+        // []abc] - ] as first char is literal, set is []abc]
+        let result = colorize_regex("[]abc]");
+        assert!(result.len() > 6, "Expected ANSI escapes");
+        assert!(result.contains("[]abc]"), "Set should include literal ]");
+    }
+
+    #[test]
+    fn colorize_negated_set_with_literal_bracket() {
+        // [^]abc] - negated set with ] as first char after ^
+        let result = colorize_regex("[^]abc]");
+        assert!(result.len() > 7, "Expected ANSI escapes");
+        assert!(result.contains("[^]abc]"), "Negated set should be intact");
+    }
+
+    #[test]
+    fn colorize_unclosed_set_stays_plain() {
+        // [abc without closing ] - should not colorize as set
+        let result = colorize_regex("[abc");
+        // Without closing bracket, it just shows characters
+        assert!(result.contains("["), "Opening bracket should be present");
+    }
+
+    #[test]
+    fn colorize_unclosed_quantifier_brace() {
+        // {3 without closing } - should not colorize as quantifier
+        let result = colorize_regex("{3");
+        assert!(result.contains("{"), "Opening brace should be present");
+        assert!(result.contains("3"), "Number should be present");
+    }
+
+    #[test]
+    fn colorize_other_escapes_not_colored() {
+        // \n, \t, \. should pass through without special color
+        for esc in &[r"\n", r"\t", r"\."] {
+            let result = colorize_regex(esc);
+            assert!(result.contains(esc), "Escape {} should pass through", esc);
+        }
+    }
+
+    #[test]
+    fn colorize_email_like_pattern() {
+        // Realistic pattern: [a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}
+        let pattern = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}";
+        let result = colorize_regex(pattern);
+        assert!(result.len() > pattern.len(), "Expected ANSI escapes");
+        assert!(result.contains("@"), "Literal @ should be present");
+    }
+}

@@ -120,3 +120,114 @@ fn main() {
         std::process::exit(1);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_cli(
+        input: Option<&str>,
+        explain: bool,
+        test: Option<&str>,
+        raw: bool,
+        flavor: Flavor,
+    ) -> Cli {
+        Cli {
+            input: input.map(|s| s.to_string()),
+            explain,
+            test: test.map(|s| s.to_string()),
+            raw,
+            flavor,
+            completions: None,
+        }
+    }
+
+    #[test]
+    fn validate_flags_generate_mode() {
+        let cli = make_cli(Some("email"), false, None, false, Flavor::Rust);
+        assert!(validate_flags(&cli).is_ok());
+    }
+
+    #[test]
+    fn validate_flags_explain_mode() {
+        let cli = make_cli(Some(r"\d+"), true, None, false, Flavor::Rust);
+        assert!(validate_flags(&cli).is_ok());
+    }
+
+    #[test]
+    fn validate_flags_test_mode() {
+        let cli = make_cli(
+            Some("email"),
+            false,
+            Some("test@example.com"),
+            false,
+            Flavor::Rust,
+        );
+        assert!(validate_flags(&cli).is_ok());
+    }
+
+    #[test]
+    fn validate_flags_explain_and_test_invalid() {
+        let cli = make_cli(Some("email"), true, Some("test"), false, Flavor::Rust);
+        let result = validate_flags(&cli);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("Cannot combine"));
+    }
+
+    #[test]
+    fn validate_flags_with_raw() {
+        let cli = make_cli(Some("email"), false, None, true, Flavor::Rust);
+        assert!(validate_flags(&cli).is_ok());
+    }
+
+    #[test]
+    fn validate_flags_with_js_flavor() {
+        let cli = make_cli(Some("email"), false, None, false, Flavor::Js);
+        assert!(validate_flags(&cli).is_ok());
+    }
+
+    #[test]
+    fn validate_flags_with_pcre_flavor() {
+        let cli = make_cli(Some("email"), false, None, false, Flavor::Pcre);
+        assert!(validate_flags(&cli).is_ok());
+    }
+
+    #[test]
+    fn validate_flags_with_posix_flavor() {
+        let cli = make_cli(Some("email"), false, None, false, Flavor::Posix);
+        assert!(validate_flags(&cli).is_ok());
+    }
+
+    #[test]
+    fn validate_flags_no_input_ok() {
+        // validate_flags doesn't check for input - run() does
+        let cli = make_cli(None, false, None, false, Flavor::Rust);
+        assert!(validate_flags(&cli).is_ok());
+    }
+
+    #[test]
+    fn flavor_as_str_rust() {
+        assert_eq!(Flavor::Rust.as_str(), "rust");
+    }
+
+    #[test]
+    fn flavor_as_str_js() {
+        assert_eq!(Flavor::Js.as_str(), "javascript");
+    }
+
+    #[test]
+    fn flavor_as_str_pcre() {
+        assert_eq!(Flavor::Pcre.as_str(), "pcre");
+    }
+
+    #[test]
+    fn flavor_as_str_posix() {
+        assert_eq!(Flavor::Posix.as_str(), "posix");
+    }
+
+    #[test]
+    fn flavor_default_is_rust() {
+        assert!(matches!(Flavor::default(), Flavor::Rust));
+    }
+}

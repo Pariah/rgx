@@ -58,3 +58,120 @@ Requirements:
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rust_flavor_prompt_contains_warning() {
+        let cmd = GenerateCommand::new("rust");
+        let prompt = cmd.build_prompt("email");
+        assert!(prompt.contains("does NOT support lookahead"));
+        assert!(prompt.contains("rust"));
+    }
+
+    #[test]
+    fn js_flavor_prompt() {
+        let cmd = GenerateCommand::new("js");
+        let prompt = cmd.build_prompt("email");
+        assert!(prompt.contains("lookbehind"));
+        assert!(prompt.contains("JavaScript"));
+    }
+
+    #[test]
+    fn pcre_flavor_prompt() {
+        let cmd = GenerateCommand::new("pcre");
+        let prompt = cmd.build_prompt("email");
+        assert!(prompt.contains("full regex features"));
+        assert!(prompt.contains("recursion"));
+    }
+
+    #[test]
+    fn posix_flavor_prompt() {
+        let cmd = GenerateCommand::new("posix");
+        let prompt = cmd.build_prompt("email");
+        assert!(prompt.contains("[0-9]"));
+        assert!(prompt.contains("no \\d"));
+    }
+
+    #[test]
+    fn unknown_flavor_no_note() {
+        let cmd = GenerateCommand::new("unknown");
+        let prompt = cmd.build_prompt("email");
+        // Should still work, just no flavor note
+        assert!(prompt.contains("email"));
+        assert!(prompt.contains("unknown"));
+    }
+
+    #[test]
+    fn prompt_includes_description() {
+        let cmd = GenerateCommand::new("rust");
+        let prompt = cmd.build_prompt("phone number with area code");
+        assert!(prompt.contains("phone number with area code"));
+    }
+
+    #[test]
+    fn prompt_has_json_schema() {
+        let cmd = GenerateCommand::new("rust");
+        let prompt = cmd.build_prompt("email");
+        assert!(prompt.contains("\"pattern\""));
+        assert!(prompt.contains("\"matches\""));
+        assert!(prompt.contains("\"non_matches\""));
+        assert!(prompt.contains("\"explanation\""));
+    }
+
+    #[test]
+    fn default_flavor_is_rust() {
+        let cmd = GenerateCommand::default();
+        assert_eq!(cmd.flavor, "rust");
+    }
+
+    #[test]
+    fn parse_valid_response() {
+        let cmd = GenerateCommand::default();
+        let json = r#"{"pattern": "\\d+", "matches": ["123", "456"], "non_matches": ["abc"], "explanation": "Matches digits"}"#;
+        let resp = cmd.parse_response(json).unwrap();
+        assert_eq!(resp.pattern, "\\d+");
+        assert_eq!(resp.matches, vec!["123", "456"]);
+        assert_eq!(resp.non_matches, vec!["abc"]);
+        assert_eq!(resp.explanation, "Matches digits");
+    }
+
+    #[test]
+    fn parse_malformed_json() {
+        let cmd = GenerateCommand::default();
+        let result = cmd.parse_response("not valid json");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_missing_required_fields() {
+        let cmd = GenerateCommand::default();
+        let json = r#"{"pattern": "\\d+"}"#;
+        // Missing matches, non_matches, explanation - should fail
+        let result = cmd.parse_response(json);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_empty_arrays() {
+        let cmd = GenerateCommand::default();
+        let json = r#"{"pattern": ".*", "matches": [], "non_matches": [], "explanation": "Matches anything"}"#;
+        let resp = cmd.parse_response(json).unwrap();
+        assert!(resp.matches.is_empty());
+        assert!(resp.non_matches.is_empty());
+    }
+
+    #[test]
+    fn generate_response_clone() {
+        let resp = GenerateResponse {
+            pattern: "\\d+".to_string(),
+            matches: vec!["123".to_string()],
+            non_matches: vec!["abc".to_string()],
+            explanation: "digits".to_string(),
+        };
+        let cloned = resp.clone();
+        assert_eq!(resp.pattern, cloned.pattern);
+    }
+}
